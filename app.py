@@ -1,73 +1,52 @@
 import streamlit as st
 from dotenv import load_dotenv
 from PyPDF2 import PdfReader
-from langchain.text_splitter import CharacterTextSplitter
-from langchain.embeddings import OpenAIEmbeddings#, HuggingFaceInstructEmbeddings
-from langchain.vectorstores import FAISS
-from langchain.chat_models import ChatOpenAI
+from langchain_text_splitters import CharacterTextSplitter
+from langchain_openai import OpenAIEmbeddings, ChatOpenAI
+from langchain_community.vectorstores import FAISS
 from langchain.memory import ConversationBufferMemory
 from langchain.chains import ConversationalRetrievalChain
 from html_files import css, bot_template, user_template
-#from langchain.llms import HuggingFaceHub
 
 def get_pdf_text(pdf_docs):
-    text = ""
-    pdf_pages_info = []
-    current_pos = 0
+    """Efficiently extract text from PDFs and track source files"""
+    all_text = ""
+    chunk_metadatas = []
+    pdf_dict = {}  # Map PDF name to its content
     
+    # Read all PDFs once and store their content
     for pdf in pdf_docs:
         pdf_reader = PdfReader(pdf)
-        for page_num, page in enumerate(pdf_reader.pages, 1):
+        pdf_text = ""
+        for page in pdf_reader.pages:
             page_text = page.extract_text()
-            text += page_text
-            # Store where this page starts and ends in the concatenated text
-            pdf_pages_info.append({
-                "source": pdf.name,
-                "page": page_num,
-                "start_pos": current_pos,
-                "end_pos": current_pos + len(page_text)
-            })
-            current_pos += len(page_text)
+            if page_text:
+                pdf_text += page_text
+        pdf_dict[pdf.name] = pdf_text
+        all_text += pdf_text
     
-    return text, pdf_pages_info
-
-
-def get_text_chunks(text, pdf_pages_info):
+    # Create chunks
     text_splitter = CharacterTextSplitter(
         separator="\n",
         chunk_size=1000,
         chunk_overlap=200,
         length_function=len
     )
-    chunks = text_splitter.split_text(text)
+    chunks = text_splitter.split_text(all_text)
     
-    # Map each chunk to its source page
-    chunk_metadatas = []
-    char_pos = 0
-    
+    # Map chunks to source files more efficiently
     for chunk in chunks:
-        # Find which page this chunk's starting position falls into
-        chunk_start = char_pos
-        chunk_end = char_pos + len(chunk)
-        
-        # Find the page that contains this chunk's start
-        page_info = None
-        for info in pdf_pages_info:
-            if info["start_pos"] <= chunk_start < info["end_pos"]:
-                page_info = info
+        # Find which PDF this chunk belongs to
+        found = False
+        for pdf_name, pdf_content in pdf_dict.items():
+            if chunk in pdf_content:
+                chunk_metadatas.append({"source": pdf_name})
+                found = True
                 break
-        
-        if page_info is None and pdf_pages_info:
-            # Fallback: use the last page
-            page_info = pdf_pages_info[-1]
-        
-        if page_info:
-            chunk_metadatas.append({
-                "source": page_info["source"],
-                "page": page_info["page"]
-            })
-        
-        char_pos = chunk_end
+        if not found:
+            # Fallback to first PDF if not found
+            first_pdf_name = next(iter(pdf_dict.keys())) if pdf_dict else "Unknown"
+            chunk_metadatas.append({"source": first_pdf_name})
     
     return chunks, chunk_metadatas
 
@@ -78,7 +57,7 @@ def get_vectorstore(text_chunks, chunk_metadatas):
     # Ensure every chunk has metadata
     for i, chunk in enumerate(text_chunks):
         if i >= len(chunk_metadatas):
-            chunk_metadatas.append({"source": "Unknown", "page": "N/A"})
+            chunk_metadatas.append({"source": "Unknown"})
     
     vectorstore = FAISS.from_texts(texts=text_chunks, embedding=embeddings, metadatas=chunk_metadatas)
     return vectorstore
@@ -106,7 +85,7 @@ def handle_userinput(user_question):
     response = st.session_state.conversation({'question': user_question})
     st.session_state.chat_history = response['chat_history']
     
-    # Get source documents using the retriever - retrieve only 1 to get the most relevant
+    # Get source documents using the retriever
     source_documents = st.session_state.vectorstore.similarity_search(user_question, k=1)
 
     for i, message in enumerate(st.session_state.chat_history):
@@ -117,15 +96,15 @@ def handle_userinput(user_question):
             st.write(bot_template.replace(
                 "{{MSG}}", message.content), unsafe_allow_html=True)
     
-    # Display source documents
+    # Display source file
     if source_documents:
         st.markdown("---")
-        st.subheader("📄 Fontes de Informação")
-        for i, doc in enumerate(source_documents, 1):
-            source_name = doc.metadata.get('source', 'Unknown')
-            page_num = doc.metadata.get('page', 'N/A')
-            with st.expander(f"Fonte {i}: {source_name} (Página {page_num})"):
-                st.write(doc.page_content)
+        st.subheader("📄 Fonte da Informação")
+        doc = source_documents[0]
+        source_name = doc.metadata.get('source', 'Unknown')
+        st.info(f"**Arquivo:** {source_name}")
+        with st.expander("Ver trecho completo"):
+            st.write(doc.page_content)
 
 
 def main():
@@ -150,11 +129,8 @@ def main():
             "Upload your PDFs here and click on 'Process'", accept_multiple_files=True)
         if st.button("Process"):
             with st.spinner("Processing"):
-                # get pdf text
-                raw_text, pdf_pages_info = get_pdf_text(pdf_docs)
-
-                # get the text chunks
-                text_chunks, chunk_metadatas = get_text_chunks(raw_text, pdf_pages_info)
+                # get pdf text and chunks
+                text_chunks, chunk_metadatas = get_pdf_text(pdf_docs)
 
                 # create vector store
                 vectorstore = get_vectorstore(text_chunks, chunk_metadatas)
