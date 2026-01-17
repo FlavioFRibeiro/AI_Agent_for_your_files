@@ -12,18 +12,27 @@ from html_files import css, bot_template, user_template
 
 def get_pdf_text(pdf_docs):
     text = ""
-    pdf_pages = []
+    pdf_pages_info = []
+    current_pos = 0
+    
     for pdf in pdf_docs:
         pdf_reader = PdfReader(pdf)
         for page_num, page in enumerate(pdf_reader.pages, 1):
             page_text = page.extract_text()
             text += page_text
-            # Store page info with text length
-            pdf_pages.append({"source": pdf.name, "page": page_num, "text_len": len(page_text)})
-    return text, pdf_pages
+            # Store where this page starts and ends in the concatenated text
+            pdf_pages_info.append({
+                "source": pdf.name,
+                "page": page_num,
+                "start_pos": current_pos,
+                "end_pos": current_pos + len(page_text)
+            })
+            current_pos += len(page_text)
+    
+    return text, pdf_pages_info
 
 
-def get_text_chunks(text, pdf_pages):
+def get_text_chunks(text, pdf_pages_info):
     text_splitter = CharacterTextSplitter(
         separator="\n",
         chunk_size=1000,
@@ -32,29 +41,33 @@ def get_text_chunks(text, pdf_pages):
     )
     chunks = text_splitter.split_text(text)
     
-    # Map metadatas to chunks
+    # Map each chunk to its source page
     chunk_metadatas = []
     char_pos = 0
-    page_idx = 0
-    accumulated_len = 0
     
     for chunk in chunks:
-        # Find which page this chunk belongs to
-        while page_idx < len(pdf_pages):
-            accumulated_len += pdf_pages[page_idx]["text_len"]
-            if char_pos < accumulated_len:
-                chunk_metadatas.append({
-                    "source": pdf_pages[page_idx]["source"],
-                    "page": pdf_pages[page_idx]["page"]
-                })
-                break
-            page_idx += 1
-        else:
-            # Fallback if we run out of pages
-            if pdf_pages:
-                chunk_metadatas.append(pdf_pages[-1])
+        # Find which page this chunk's starting position falls into
+        chunk_start = char_pos
+        chunk_end = char_pos + len(chunk)
         
-        char_pos += len(chunk)
+        # Find the page that contains this chunk's start
+        page_info = None
+        for info in pdf_pages_info:
+            if info["start_pos"] <= chunk_start < info["end_pos"]:
+                page_info = info
+                break
+        
+        if page_info is None and pdf_pages_info:
+            # Fallback: use the last page
+            page_info = pdf_pages_info[-1]
+        
+        if page_info:
+            chunk_metadatas.append({
+                "source": page_info["source"],
+                "page": page_info["page"]
+            })
+        
+        char_pos = chunk_end
     
     return chunks, chunk_metadatas
 
@@ -62,6 +75,11 @@ def get_text_chunks(text, pdf_pages):
 def get_vectorstore(text_chunks, chunk_metadatas):
     embeddings = OpenAIEmbeddings()
     # embeddings = HuggingFaceInstructEmbeddings(model_name="hkunlp/instructor-xl")
+    # Ensure every chunk has metadata
+    for i, chunk in enumerate(text_chunks):
+        if i >= len(chunk_metadatas):
+            chunk_metadatas.append({"source": "Unknown", "page": "N/A"})
+    
     vectorstore = FAISS.from_texts(texts=text_chunks, embedding=embeddings, metadatas=chunk_metadatas)
     return vectorstore
 
@@ -88,8 +106,8 @@ def handle_userinput(user_question):
     response = st.session_state.conversation({'question': user_question})
     st.session_state.chat_history = response['chat_history']
     
-    # Get source documents using the retriever
-    source_documents = st.session_state.vectorstore.similarity_search(user_question, k=4)
+    # Get source documents using the retriever - retrieve only 1 to get the most relevant
+    source_documents = st.session_state.vectorstore.similarity_search(user_question, k=1)
 
     for i, message in enumerate(st.session_state.chat_history):
         if i % 2 == 0:
@@ -133,10 +151,10 @@ def main():
         if st.button("Process"):
             with st.spinner("Processing"):
                 # get pdf text
-                raw_text, pdf_pages = get_pdf_text(pdf_docs)
+                raw_text, pdf_pages_info = get_pdf_text(pdf_docs)
 
                 # get the text chunks
-                text_chunks, chunk_metadatas = get_text_chunks(raw_text, pdf_pages)
+                text_chunks, chunk_metadatas = get_text_chunks(raw_text, pdf_pages_info)
 
                 # create vector store
                 vectorstore = get_vectorstore(text_chunks, chunk_metadatas)
