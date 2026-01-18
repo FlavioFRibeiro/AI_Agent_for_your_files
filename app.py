@@ -92,27 +92,6 @@ def handle_userinput(user_question):
     
     response = st.session_state.conversation({'question': user_question})
     st.session_state.chat_history = response['chat_history']
-    
-    # Get source documents using the retriever
-    source_documents = st.session_state.vectorstore.similarity_search(user_question, k=1)
-
-    for i, message in enumerate(st.session_state.chat_history):
-        if i % 2 == 0:
-            st.write(user_template.replace(
-                "{{MSG}}", message.content), unsafe_allow_html=True)
-        else:
-            st.write(bot_template.replace(
-                "{{MSG}}", message.content), unsafe_allow_html=True)
-    
-    # Display source file
-    if source_documents:
-        st.markdown("---")
-        st.subheader("📄 Fonte da Informação")
-        doc = source_documents[0]
-        source_name = doc.metadata.get('source', 'Unknown')
-        st.info(f"**Arquivo:** {source_name}")
-        with st.expander("Ver trecho completo"):
-            st.write(doc.page_content)
 
 
 def main():
@@ -124,11 +103,48 @@ def main():
         st.session_state.conversation = None
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = None
+    if "last_question" not in st.session_state:
+        st.session_state.last_question = ""
+
+    def handle_question():
+        if st.session_state.question_input:
+            handle_userinput(st.session_state.question_input)
+            st.session_state.last_question = st.session_state.question_input
+            st.session_state.question_input = ""
 
     st.header("Chat with multiple PDFs :books:")
-    user_question = st.text_input("Ask a question about your documents:")
-    if user_question:
-        handle_userinput(user_question)
+    
+    # Campo de pergunta no topo
+    st.text_input(
+        "Ask a question about your documents:", 
+        key="question_input",
+        on_change=handle_question
+    )
+    
+    # Separador visual
+    st.markdown("---")
+    
+    # Mostrar o chat embaixo
+    if st.session_state.conversation is not None and st.session_state.chat_history:
+        for i, message in enumerate(reversed(st.session_state.chat_history)):
+            if i % 2 == 0:
+                st.write(user_template.replace(
+                    "{{MSG}}", message.content), unsafe_allow_html=True)
+            else:
+                st.write(bot_template.replace(
+                    "{{MSG}}", message.content), unsafe_allow_html=True)
+        
+        # Mostrar fonte de informação da última pergunta
+        if st.session_state.last_question:
+            source_documents = st.session_state.vectorstore.similarity_search(st.session_state.last_question, k=1)
+            if source_documents:
+                st.markdown("---")
+                st.subheader("📄 Fonte da Informação")
+                doc = source_documents[0]
+                source_name = doc.metadata.get('source', 'Unknown')
+                st.info(f"**Arquivo:** {source_name}")
+                with st.expander("Ver trecho completo"):
+                    st.write(doc.page_content)
 
     with st.sidebar:
         st.subheader("Your documents")

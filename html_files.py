@@ -4,17 +4,17 @@ css = '''
     padding: 1.5rem; border-radius: 0.5rem; margin-bottom: 1rem; display: flex
 }
 .chat-message.user {
-    background-color: #2b313e
+    background-color: #3d4556
 }
 .chat-message.bot {
-    background-color: #475063
+    background-color: #525d75
 }
 .chat-message .avatar {
   width: 20%;
 }
 .chat-message .avatar img {
-  max-width: 78px;
-  max-height: 78px;
+  max-width: 60px;
+  max-height: 60px;
   border-radius: 50%;
   object-fit: cover;
 }
@@ -28,7 +28,7 @@ css = '''
 bot_template = '''
 <div class="chat-message bot">
     <div class="avatar">
-        <div style="max-height: 78px; max-width: 78px; border-radius: 50%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 24px;">🤖</div>
+        <div style="width: 60px; height: 60px; border-radius: 10px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 32px; box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);">🤖</div>
     </div>
     <div class="message">{{MSG}}</div>
 </div>
@@ -37,7 +37,7 @@ bot_template = '''
 user_template = '''
 <div class="chat-message user">
     <div class="avatar">
-        <div style="max-height: 78px; max-width: 78px; border-radius: 50%; background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 24px;">👤</div>
+        <div style="width: 60px; height: 60px; border-radius: 10px; background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 32px; box-shadow: 0 4px 12px rgba(245, 87, 108, 0.3);">👤</div>
     </div>    
     <div class="message">{{MSG}}</div>
 </div>
