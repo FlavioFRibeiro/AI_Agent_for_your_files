@@ -1,3 +1,5 @@
+import warnings
+import os
 import streamlit as st
 from dotenv import load_dotenv
 from PyPDF2 import PdfReader
@@ -7,6 +9,14 @@ from langchain_community.vectorstores import FAISS
 from langchain.memory import ConversationBufferMemory
 from langchain.chains import ConversationalRetrievalChain
 from html_files import css, bot_template, user_template
+
+# Suprimir warnings desnecessários
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+
+# Carregar variáveis de ambiente no início
+load_dotenv()
+
 
 def get_pdf_text(pdf_docs):
     """Efficiently extract text from PDFs and track source files"""
@@ -53,7 +63,6 @@ def get_pdf_text(pdf_docs):
 
 def get_vectorstore(text_chunks, chunk_metadatas):
     embeddings = OpenAIEmbeddings()
-    # embeddings = HuggingFaceInstructEmbeddings(model_name="hkunlp/instructor-xl")
     # Ensure every chunk has metadata
     for i, chunk in enumerate(text_chunks):
         if i >= len(chunk_metadatas):
@@ -65,7 +74,6 @@ def get_vectorstore(text_chunks, chunk_metadatas):
 
 def get_conversation_chain(vectorstore):
     llm = ChatOpenAI()
-    # llm = HuggingFaceHub(repo_id="google/flan-t5-xxl", model_kwargs={"temperature":0.5, "max_length":512})
 
     memory = ConversationBufferMemory(
         memory_key='chat_history', return_messages=True)
@@ -108,7 +116,6 @@ def handle_userinput(user_question):
 
 
 def main():
-    load_dotenv()
     st.set_page_config(page_title="Chat with multiple PDFs",
                        page_icon=":books:")
     st.write(css, unsafe_allow_html=True)
@@ -128,6 +135,10 @@ def main():
         pdf_docs = st.file_uploader(
             "Upload your PDFs here and click on 'Process'", accept_multiple_files=True)
         if st.button("Process"):
+            if not pdf_docs:
+                st.error("Please upload at least one PDF file!")
+                return
+            
             with st.spinner("Processing"):
                 # get pdf text and chunks
                 text_chunks, chunk_metadatas = get_pdf_text(pdf_docs)
