@@ -18,7 +18,7 @@ os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 load_dotenv()
 
 # Configurações do LLM
-LLM_MODEL = "gpt-4o mini"
+LLM_MODEL = "gpt-4o-mini"
 
 
 def get_pdf_text(pdf_docs):
