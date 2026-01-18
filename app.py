@@ -128,10 +128,10 @@ def main():
     if st.session_state.conversation is not None and st.session_state.chat_history:
         for i, message in enumerate(reversed(st.session_state.chat_history)):
             if i % 2 == 0:
-                st.write(user_template.replace(
+                st.write(bot_template.replace(
                     "{{MSG}}", message.content), unsafe_allow_html=True)
             else:
-                st.write(bot_template.replace(
+                st.write(user_template.replace(
                     "{{MSG}}", message.content), unsafe_allow_html=True)
         
         # Mostrar fonte de informação da última pergunta

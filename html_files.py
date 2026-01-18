@@ -4,10 +4,10 @@ css = '''
     padding: 1.5rem; border-radius: 0.5rem; margin-bottom: 1rem; display: flex
 }
 .chat-message.user {
-    background-color: #3d4556
+    background-color: #e8e8e8
 }
 .chat-message.bot {
-    background-color: #525d75
+    background-color: #7686ad
 }
 .chat-message .avatar {
   width: 20%;
@@ -39,6 +39,6 @@ user_template = '''
     <div class="avatar">
         <div style="width: 60px; height: 60px; border-radius: 10px; background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 32px; box-shadow: 0 4px 12px rgba(245, 87, 108, 0.3);">👤</div>
     </div>    
-    <div class="message">{{MSG}}</div>
+    <div class="message" style="color: #333;">{{MSG}}</div>
 </div>
 '''
