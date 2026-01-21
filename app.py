@@ -135,6 +135,12 @@ def main():
         st.session_state.pdf_bytes = {}
     if "page_images" not in st.session_state:
         st.session_state.page_images = {}
+    if "process_status" not in st.session_state:
+        st.session_state.process_status = None
+    if "process_message" not in st.session_state:
+        st.session_state.process_message = None
+    if "process_warnings" not in st.session_state:
+        st.session_state.process_warnings = []
 
     def handle_question():
         if st.session_state.question_input:
@@ -175,30 +181,40 @@ def main():
             "Upload your PDFs here and click on 'Process'", accept_multiple_files=True)
         if st.button("Process"):
             if not pdf_docs:
-                st.error("Please upload at least one PDF file!")
-                return
+                st.session_state.process_status = "error"
+                st.session_state.process_message = "Please upload at least one PDF file!"
+            else:
+                with st.spinner("Processing"):
+                    st.session_state.pdf_bytes = {pdf.name: pdf.getvalue() for pdf in pdf_docs}
+                    st.session_state.page_images = {}
+                    st.session_state.chat_sources = []
+                    st.session_state.chat_history = None
+                    st.session_state.last_question = ""
+                    st.session_state.process_warnings = []
 
-            with st.spinner("Processing"):
-                st.session_state.pdf_bytes = {pdf.name: pdf.getvalue() for pdf in pdf_docs}
-                st.session_state.page_images = {}
-                st.session_state.chat_sources = []
-                st.session_state.chat_history = None
-                st.session_state.last_question = ""
+                    documents, empty_files = get_pdf_documents(pdf_docs)
+                    if empty_files:
+                        st.session_state.process_warnings = empty_files
+                    if not documents:
+                        st.session_state.process_status = "error"
+                        st.session_state.process_message = (
+                            "No text could be extracted from the uploaded PDFs."
+                        )
+                    else:
+                        vectorstore = get_vectorstore(documents)
+                        st.session_state.conversation = get_conversation_chain(vectorstore)
+                        st.session_state.vectorstore = vectorstore
+                        st.session_state.process_status = "success"
+                        st.session_state.process_message = (
+                            "Processing complete! You can now ask questions about your documents."
+                        )
 
-                documents, empty_files = get_pdf_documents(pdf_docs)
-                if empty_files:
-                    st.warning("No extractable text found in: " + ", ".join(empty_files))
-                if not documents:
-                    st.error("No text could be extracted from the uploaded PDFs.")
-                    return
-
-                vectorstore = get_vectorstore(documents)
-
-                st.session_state.conversation = get_conversation_chain(
-                    vectorstore)
-                st.session_state.vectorstore = vectorstore
-                st.success("Processing complete! You can now ask questions about your documents.")
-                st.rerun()
+        if st.session_state.process_warnings:
+            st.warning("No extractable text found in: " + ", ".join(st.session_state.process_warnings))
+        if st.session_state.process_status == "error" and st.session_state.process_message:
+            st.error(st.session_state.process_message)
+        if st.session_state.process_status == "success" and st.session_state.process_message:
+            st.success(st.session_state.process_message)
 
 if __name__ == '__main__':
     main()
