@@ -2,6 +2,7 @@ import warnings
 import os
 import streamlit as st
 from dotenv import load_dotenv
+import fitz
 from PyPDF2 import PdfReader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
@@ -100,6 +101,10 @@ def main():
         st.session_state.last_question = ""
     if "last_sources" not in st.session_state:
         st.session_state.last_sources = []
+    if "pdf_bytes" not in st.session_state:
+        st.session_state.pdf_bytes = {}
+    if "page_images" not in st.session_state:
+        st.session_state.page_images = {}
 
     def handle_question():
         if st.session_state.question_input:
@@ -140,6 +145,27 @@ def main():
             else:
                 st.info(f"**Arquivo:** {source_name}")
 
+            if page_number and source_name in st.session_state.pdf_bytes:
+                cache_key = (source_name, page_number)
+                image_bytes = st.session_state.page_images.get(cache_key)
+                if image_bytes is None:
+                    try:
+                        pdf_stream = st.session_state.pdf_bytes[source_name]
+                        pdf_doc = fitz.open(stream=pdf_stream, filetype="pdf")
+                        page = pdf_doc.load_page(page_number - 1)
+                        pix = page.get_pixmap(dpi=150)
+                        image_bytes = pix.tobytes("png")
+                        st.session_state.page_images[cache_key] = image_bytes
+                    except Exception:
+                        image_bytes = None
+                    finally:
+                        try:
+                            pdf_doc.close()
+                        except Exception:
+                            pass
+                if image_bytes:
+                    st.image(image_bytes, caption=f"{source_name} - page {page_number}")
+
     with st.sidebar:
         st.subheader("Your documents")
         pdf_docs = st.file_uploader(
@@ -150,6 +176,9 @@ def main():
                 return
 
             with st.spinner("Processing"):
+                st.session_state.pdf_bytes = {pdf.name: pdf.getvalue() for pdf in pdf_docs}
+                st.session_state.page_images = {}
+
                 documents, empty_files = get_pdf_documents(pdf_docs)
                 if empty_files:
                     st.warning("No extractable text found in: " + ", ".join(empty_files))
