@@ -150,14 +150,11 @@ def main():
 
     st.header("Chat with multiple PDFs :books:")
 
-    if st.session_state.conversation is None:
-        st.info("Upload and process your PDFs to enable the search bar.")
-    else:
-        st.text_input(
-            "Ask a question about your documents:",
-            key="question_input",
-            on_change=handle_question
-        )
+    st.text_input(
+        "Ask a question about your documents:",
+        key="question_input",
+        on_change=handle_question
+    )
 
     st.markdown("---")
 
