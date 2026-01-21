@@ -5,6 +5,7 @@ This project is a lightweight Retrieval-Augmented Generation (RAG) app that lets
 ## Features
 - Upload multiple PDFs and ask questions about their content.
 - Page-aware retrieval (the answer can reference the source file and page).
+- Visual preview of the source PDF page under each bot response.
 - Simple UI with a guided flow (upload -> process -> ask).
 
 ## Tech Stack / Libraries
@@ -15,6 +16,7 @@ This project is a lightweight Retrieval-Augmented Generation (RAG) app that lets
 - `langchain-openai` - OpenAI LLM + embeddings
 - `langchain-community` - FAISS vector store integration
 - `faiss-cpu` - vector similarity search backend (required by FAISS)
+- `PyMuPDF` - render PDF pages as images
 
 ## Setup
 1. Create a virtual environment (optional but recommended).
@@ -38,3 +40,4 @@ streamlit run app.py
 ## Notes
 - Everything is intentionally kept in `app.py` to simplify deployment on low-cost cloud hosting.
 - The app extracts per-page text and stores page metadata so you can identify where answers come from.
+- Source pages are rendered from the original PDFs to provide visual context.

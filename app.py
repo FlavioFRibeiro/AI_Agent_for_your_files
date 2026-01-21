@@ -85,7 +85,37 @@ def handle_userinput(user_question):
 
     response = st.session_state.conversation({'question': user_question})
     st.session_state.chat_history = response['chat_history']
-    st.session_state.last_sources = response.get('source_documents', [])
+    st.session_state.chat_sources.append(response.get('source_documents', []))
+
+
+def render_source_preview(doc):
+    source_name = doc.metadata.get('source', 'Unknown')
+    page_number = doc.metadata.get('page')
+    if page_number:
+        st.info(f"**Arquivo:** {source_name} (page {page_number})")
+    else:
+        st.info(f"**Arquivo:** {source_name}")
+
+    if page_number and source_name in st.session_state.pdf_bytes:
+        cache_key = (source_name, page_number)
+        image_bytes = st.session_state.page_images.get(cache_key)
+        if image_bytes is None:
+            try:
+                pdf_stream = st.session_state.pdf_bytes[source_name]
+                pdf_doc = fitz.open(stream=pdf_stream, filetype="pdf")
+                page = pdf_doc.load_page(page_number - 1)
+                pix = page.get_pixmap(dpi=150)
+                image_bytes = pix.tobytes("png")
+                st.session_state.page_images[cache_key] = image_bytes
+            except Exception:
+                image_bytes = None
+            finally:
+                try:
+                    pdf_doc.close()
+                except Exception:
+                    pass
+        if image_bytes:
+            st.image(image_bytes, caption=f"{source_name} - page {page_number}")
 
 
 def main():
@@ -99,8 +129,8 @@ def main():
         st.session_state.chat_history = None
     if "last_question" not in st.session_state:
         st.session_state.last_question = ""
-    if "last_sources" not in st.session_state:
-        st.session_state.last_sources = []
+    if "chat_sources" not in st.session_state:
+        st.session_state.chat_sources = []
     if "pdf_bytes" not in st.session_state:
         st.session_state.pdf_bytes = {}
     if "page_images" not in st.session_state:
@@ -126,45 +156,18 @@ def main():
     st.markdown("---")
 
     if st.session_state.conversation is not None and st.session_state.chat_history:
+        sources_rev = list(reversed(st.session_state.chat_sources))
+        source_idx = 0
         for i, message in enumerate(reversed(st.session_state.chat_history)):
             if i % 2 == 0:
                 st.write(bot_template.replace(
                     "{{MSG}}", message.content), unsafe_allow_html=True)
+                if source_idx < len(sources_rev) and sources_rev[source_idx]:
+                    render_source_preview(sources_rev[source_idx][0])
+                source_idx += 1
             else:
                 st.write(user_template.replace(
                     "{{MSG}}", message.content), unsafe_allow_html=True)
-
-        if st.session_state.last_sources:
-            st.markdown("---")
-            st.subheader("Information Source")
-            doc = st.session_state.last_sources[0]
-            source_name = doc.metadata.get('source', 'Unknown')
-            page_number = doc.metadata.get('page')
-            if page_number:
-                st.info(f"**Arquivo:** {source_name} (page {page_number})")
-            else:
-                st.info(f"**Arquivo:** {source_name}")
-
-            if page_number and source_name in st.session_state.pdf_bytes:
-                cache_key = (source_name, page_number)
-                image_bytes = st.session_state.page_images.get(cache_key)
-                if image_bytes is None:
-                    try:
-                        pdf_stream = st.session_state.pdf_bytes[source_name]
-                        pdf_doc = fitz.open(stream=pdf_stream, filetype="pdf")
-                        page = pdf_doc.load_page(page_number - 1)
-                        pix = page.get_pixmap(dpi=150)
-                        image_bytes = pix.tobytes("png")
-                        st.session_state.page_images[cache_key] = image_bytes
-                    except Exception:
-                        image_bytes = None
-                    finally:
-                        try:
-                            pdf_doc.close()
-                        except Exception:
-                            pass
-                if image_bytes:
-                    st.image(image_bytes, caption=f"{source_name} - page {page_number}")
 
     with st.sidebar:
         st.subheader("Your documents")
@@ -178,6 +181,9 @@ def main():
             with st.spinner("Processing"):
                 st.session_state.pdf_bytes = {pdf.name: pdf.getvalue() for pdf in pdf_docs}
                 st.session_state.page_images = {}
+                st.session_state.chat_sources = []
+                st.session_state.chat_history = None
+                st.session_state.last_question = ""
 
                 documents, empty_files = get_pdf_documents(pdf_docs)
                 if empty_files:
